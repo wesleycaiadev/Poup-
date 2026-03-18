@@ -1,10 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('⚠️ Supabase URL ou Anon Key não configurados no .env.local');
-}
+// Usamos placeholders para evitar que o 빌d do Next.js pife se as variáveis não estiverem no Vercel
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder-build.supabase.co';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
