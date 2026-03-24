@@ -2,6 +2,7 @@
 
 import { useExpenseStore } from "@/hooks/use-expense-store";
 import { formatCurrency } from "@/lib/formatters";
+import { CATEGORIES } from "@/constants/categories";
 import { GlassCard } from "@/components/ui/glass-card";
 import { motion } from "framer-motion";
 
@@ -19,8 +20,8 @@ export const ChartsView = () => {
   const categories = Object.entries(categoryTotals).map(([id, amount]) => ({
     id,
     amount,
-    label: id.charAt(0).toUpperCase() + id.slice(1), // Idealmente pegar do mapa de categorias
-    color: id === 'food' ? 'bg-emerald-500' : id === 'transport' ? 'bg-blue-500' : 'bg-purple-500',
+    label: CATEGORIES[id]?.label || id.charAt(0).toUpperCase() + id.slice(1),
+    color: CATEGORIES[id]?.color || 'bg-slate-500',
   }));
 
   return (

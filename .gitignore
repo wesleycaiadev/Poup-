@@ -36,6 +36,11 @@ yarn-error.log*
 # vercel
 .vercel
 
+# antigravity kit (não subir)
+/antigravity-kit-main
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel

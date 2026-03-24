@@ -1,26 +1,50 @@
 "use client";
 
 import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { Mail, Lock, User, ArrowRight, Camera, Eye, EyeOff } from 'lucide-react';
 import { GlassCard } from '@/components/ui/glass-card';
 
+// Mensagens de erro traduzidas
+const ERROR_MESSAGES: Record<string, string> = {
+  'Invalid login credentials': 'E-mail ou senha incorretos.',
+  'Email not confirmed': 'Confirme seu e-mail antes de fazer login.',
+  'User already registered': 'Este e-mail já está cadastrado.',
+  'Password should be at least 6 characters': 'A senha deve ter no mínimo 6 caracteres.',
+  'Signup requires a valid password': 'Informe uma senha válida.',
+  'Unable to validate email address: invalid format': 'Formato de e-mail inválido.',
+  'Email rate limit exceeded': 'Muitas tentativas. Aguarde alguns minutos.',
+  'Email signups are disabled': 'Cadastro por e-mail está desativado. Ative no painel do Supabase.',
+  'Signups not allowed for this instance': 'Cadastro não permitido nesta instância.',
+  'auth_callback_failed': 'Erro na confirmação do e-mail. Tente novamente.',
+};
+
+function translateError(message: string): string {
+  return ERROR_MESSAGES[message] || `Erro: ${message}`;
+}
+
 export const LoginView = () => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(searchParams.get('error') ? translateError(searchParams.get('error')!) : '');
+  const [success, setSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [avatar, setAvatar] = useState('');
 
+  const supabase = getSupabaseBrowserClient();
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) { 
+      if (file.size > 2 * 1024 * 1024) {
         setError('A imagem deve ter menos de 2MB.');
         return;
       }
@@ -36,6 +60,7 @@ export const LoginView = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccess('');
 
     try {
       if (isLogin) {
@@ -44,11 +69,13 @@ export const LoginView = () => {
           password,
         });
         if (error) throw error;
+        router.push('/');
       } else {
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
             data: {
               name: name || email.split('@')[0],
               avatar: avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
@@ -56,9 +83,11 @@ export const LoginView = () => {
           }
         });
         if (error) throw error;
+        setSuccess('Conta criada! Verifique seu e-mail para confirmar.');
       }
-    } catch (err: any) {
-      setError(err.message || 'Ocorreu um erro.');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Ocorreu um erro inesperado.';
+      setError(translateError(message));
     } finally {
       setLoading(false);
     }
@@ -82,8 +111,8 @@ export const LoginView = () => {
               {isLogin ? 'Bem-vindo de volta' : 'Criar Conta'}
             </h1>
             <p className="text-sm text-white/50">
-              {isLogin 
-                ? 'Acesse seus gastos e controle suas finanças.' 
+              {isLogin
+                ? 'Acesse seus gastos e controle suas finanças.'
                 : 'Comece a organizar seu dinheiro de forma inteligente.'}
             </p>
           </div>
@@ -91,6 +120,12 @@ export const LoginView = () => {
           {error && (
             <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-xs text-center">
               {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs text-center">
+              {success}
             </div>
           )}
 
@@ -161,7 +196,7 @@ export const LoginView = () => {
                     className="hidden"
                     id="avatar-upload"
                   />
-                  <label 
+                  <label
                     htmlFor="avatar-upload"
                     className="w-full bg-white/5 border border-white/10 border-dashed rounded-xl py-3 px-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-white/10 transition-colors"
                   >
@@ -193,7 +228,11 @@ export const LoginView = () => {
 
           <div className="mt-6 text-center">
             <button
-              onClick={() => setIsLogin(!isLogin)}
+              onClick={() => {
+                setIsLogin(!isLogin);
+                setError('');
+                setSuccess('');
+              }}
               className="text-xs text-accent hover:underline"
             >
               {isLogin ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Faça Login'}
