@@ -8,6 +8,10 @@ export async function createSupabaseServerClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: {
+        // Limita o tamanho do cookie para evitar o erro 494 no Vercel
+        maxAge: 60 * 60 * 24 * 7, // 7 dias
+      },
       cookies: {
         getAll() {
           return cookieStore.getAll();
@@ -18,8 +22,7 @@ export async function createSupabaseServerClient() {
               cookieStore.set(name, value, options)
             );
           } catch {
-            // `setAll` é chamado em Server Components onde cookies não podem ser setados.
-            // Isso pode ser ignorado se o middleware está atualizando a sessão.
+            // Ignorar em Server Components read-only
           }
         },
       },

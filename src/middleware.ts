@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, serializeCookieHeader } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
@@ -18,9 +18,7 @@ export async function middleware(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
-          supabaseResponse = NextResponse.next({
-            request,
-          });
+          supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
@@ -29,25 +27,24 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // IMPORTANTE: Não usar getSession() aqui — getUser() faz validação no server
+  // IMPORTANTE: Usar getUser() para validação segura no server
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
 
-  // Rotas públicas que não precisam de auth
   const publicRoutes = ['/login', '/auth/callback'];
-  const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route));
+  const isPublicRoute = publicRoutes.some((route) =>
+    pathname.startsWith(route)
+  );
 
-  // Se não está autenticado e tenta acessar rota protegida
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
   }
 
-  // Se está autenticado e tenta acessar login
   if (user && pathname === '/login') {
     const url = request.nextUrl.clone();
     url.pathname = '/';
@@ -59,12 +56,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match todas as rotas exceto:
-     * - _next/static (arquivos estáticos)
-     * - _next/image (otimização de imagem)
-     * - favicon.ico, manifest.json, icons, etc.
-     */
-    '/((?!_next/static|_next/image|favicon.ico|manifest.json|icons|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|icons|sw.js|workbox-.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

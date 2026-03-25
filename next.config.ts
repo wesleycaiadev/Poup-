@@ -8,7 +8,24 @@ const withPwaConfig = withPWA({
 });
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Aumenta o limite de headers para evitar o erro 494 no Vercel
+  experimental: {
+    serverComponentsExternalPackages: [],
+  },
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default withPwaConfig(nextConfig);
+
