@@ -8,6 +8,9 @@ import { GlassCard } from "@/components/ui/glass-card";
 import { motion } from "framer-motion";
 import { User, Mail, LogOut, Camera, Save, Loader2 } from "lucide-react";
 
+// Limite aumentado para 5MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024; 
+
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
   const { userName, userAvatar, setProfile } = useExpenseStore();
@@ -23,14 +26,14 @@ export default function ProfilePage() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        setError('A imagem deve ter menos de 2MB.');
+      if (file.size > MAX_FILE_SIZE) {
+        setError('A imagem deve ter menos de 5MB.');
         return;
       }
       const reader = new FileReader();
       reader.onloadend = () => {
         setEditAvatar(reader.result as string);
-        setError("");
+        setError(""); // Limpa o erro se a imagem for válida
       };
       reader.readAsDataURL(file);
     }
@@ -38,6 +41,11 @@ export default function ProfilePage() {
 
   const handleSaveProfile = async () => {
     if (!user) return;
+    if (!editName.trim()) {
+      setError("O nome não pode ficar vazio.");
+      return;
+    }
+
     setLoading(true);
     setError("");
     setSuccess("");
@@ -55,7 +63,7 @@ export default function ProfilePage() {
 
       if (dbError) throw dbError;
 
-      // 2. Atualizar user_metadata no Auth (para consistência)
+      // 2. Atualizar user_metadata no Auth
       const { error: authError } = await supabase.auth.updateUser({
         data: { name: editName, avatar: editAvatar }
       });
@@ -69,7 +77,7 @@ export default function ProfilePage() {
       setIsEditing(false);
     } catch (err: any) {
       console.error(err);
-      setError("Erro ao atualizar o perfil. Tente novamente.");
+      setError(err.message || "Erro ao atualizar o perfil. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -83,7 +91,7 @@ export default function ProfilePage() {
     setSuccess("");
   };
 
-  const defaultAvatar = 'https://ui-avatars.com/api/?name=' + (userName || 'User') + '&background=6366f1&color=fff';
+  const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName || 'User')}&background=6366f1&color=fff`;
 
   return (
     <div className="space-y-6 pb-20">
@@ -98,7 +106,11 @@ export default function ProfilePage() {
         </div>
         {!isEditing && (
           <button 
-            onClick={() => setIsEditing(true)}
+            onClick={() => {
+              setIsEditing(true);
+              setSuccess("");
+              setError("");
+            }}
             className="text-accent text-sm font-semibold hover:text-accent/80 transition-colors"
           >
             Editar
@@ -118,11 +130,10 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Card de Perfil */}
       <GlassCard className="p-6 bg-gradient-to-br from-accent/5 to-transparent border-accent/10">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <div className="relative">
-            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-accent/30 shadow-lg bg-white/5">
+            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-accent/30 shadow-lg bg-white/5 flex-shrink-0">
               <img
                 src={(isEditing ? editAvatar : userAvatar) || defaultAvatar}
                 alt="Avatar"
@@ -133,9 +144,9 @@ export default function ProfilePage() {
             {isEditing && (
               <label 
                 htmlFor="avatar-upload"
-                className="absolute bottom-0 right-0 w-7 h-7 bg-accent rounded-full flex items-center justify-center cursor-pointer shadow-lg hover:bg-accent/90 transition-transform active:scale-95"
+                className="absolute bottom-0 right-0 w-8 h-8 bg-accent rounded-full flex items-center justify-center cursor-pointer shadow-lg hover:bg-accent/90 transition-transform active:scale-95 z-10"
               >
-                <Camera size={14} className="text-white" />
+                <Camera size={14} className="text-black" />
                 <input
                   type="file"
                   id="avatar-upload"
@@ -147,7 +158,7 @@ export default function ProfilePage() {
             )}
           </div>
           
-          <div className="flex-1">
+          <div className="flex-1 min-w-[200px]">
             {isEditing ? (
               <div className="space-y-2">
                 <input
@@ -156,11 +167,12 @@ export default function ProfilePage() {
                   onChange={(e) => setEditName(e.target.value)}
                   placeholder="Seu nome completo"
                   className="w-full bg-white/10 border border-white/20 rounded-lg py-2 px-3 text-sm text-white focus:outline-none focus:border-accent/50"
+                  maxLength={50}
                 />
               </div>
             ) : (
               <>
-                <h2 className="text-xl font-bold text-white">{userName || 'Usuário'}</h2>
+                <h2 className="text-xl font-bold text-white truncate">{userName || 'Usuário'}</h2>
                 <div className="flex items-center gap-1.5 mt-1">
                   <Mail size={12} className="text-white/40" />
                   <p className="text-xs text-white/40 truncate">{user?.email || 'email@não.encontrado'}</p>
@@ -180,8 +192,8 @@ export default function ProfilePage() {
             </button>
             <button
               onClick={handleSaveProfile}
-              disabled={loading || !editName.trim()}
-              className="flex-1 py-2.5 bg-accent hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-bold flex items-center justify-center gap-2 text-white transition-colors"
+              disabled={loading}
+              className="flex-1 py-2.5 bg-accent hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-bold flex items-center justify-center gap-2 text-black transition-colors"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
               Salvar
@@ -190,7 +202,6 @@ export default function ProfilePage() {
         )}
       </GlassCard>
 
-      {/* Informações da Conta */}
       <GlassCard className="p-5 space-y-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-white/5 border border-white/5">
@@ -211,7 +222,6 @@ export default function ProfilePage() {
         </div>
       </GlassCard>
 
-      {/* Botão de Logout */}
       <motion.button
         whileTap={{ scale: 0.95 }}
         onClick={signOut}

@@ -7,7 +7,8 @@ import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { Mail, Lock, User, ArrowRight, Camera, Eye, EyeOff } from 'lucide-react';
 import { GlassCard } from '@/components/ui/glass-card';
 
-// Mensagens de erro traduzidas
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
 const ERROR_MESSAGES: Record<string, string> = {
   'Invalid login credentials': 'E-mail ou senha incorretos.',
   'Email not confirmed': 'Confirme seu e-mail antes de fazer login.',
@@ -16,13 +17,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   'Signup requires a valid password': 'Informe uma senha válida.',
   'Unable to validate email address: invalid format': 'Formato de e-mail inválido.',
   'Email rate limit exceeded': 'Muitas tentativas. Aguarde alguns minutos.',
-  'Email signups are disabled': 'Cadastro por e-mail está desativado. Ative no painel do Supabase.',
-  'Signups not allowed for this instance': 'Cadastro não permitido nesta instância.',
   'auth_callback_failed': 'Erro na confirmação do e-mail. Tente novamente.',
 };
 
 function translateError(message: string): string {
-  return ERROR_MESSAGES[message] || `Erro: ${message}`;
+  return ERROR_MESSAGES[message] || message;
 }
 
 export const LoginView = () => {
@@ -44,13 +43,14 @@ export const LoginView = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        setError('A imagem deve ter menos de 2MB.');
+      if (file.size > MAX_FILE_SIZE) {
+        setError('A imagem deve ter menos de 5MB.');
         return;
       }
       const reader = new FileReader();
       reader.onloadend = () => {
         setAvatar(reader.result as string);
+        setError('');
       };
       reader.readAsDataURL(file);
     }
@@ -64,46 +64,53 @@ export const LoginView = () => {
 
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { error: authError } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
-        if (error) throw error;
+        if (authError) throw authError;
         router.push('/');
+        router.refresh();
       } else {
-        const { error } = await supabase.auth.signUp({
+        const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name || email.split('@')[0])}&background=6366f1&color=fff`;
+        
+        const { error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/auth/callback`,
             data: {
               name: name || email.split('@')[0],
-              avatar: avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+              avatar: avatar || defaultAvatar,
             }
           }
         });
-        if (error) throw error;
-        setSuccess('Conta criada! Verifique seu e-mail para confirmar.');
+        
+        if (signUpError) throw signUpError;
+        setSuccess('Conta criada! Verifique sua caixa de entrada (ou spam) para confirmar o e-mail.');
+        // Limpar os campos após criar a conta
+        setEmail('');
+        setPassword('');
+        setName('');
+        setAvatar('');
       }
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Ocorreu um erro inesperado.';
-      setError(translateError(message));
+    } catch (err: any) {
+      setError(translateError(err.message || 'Ocorreu um erro inesperado.'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#090b0e] px-4">
-      {/* Background Glows */}
-      <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-accent/30 rounded-full blur-[120px] -z-10" />
-      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/20 rounded-full blur-[120px] -z-10" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#090b0e] px-4 overflow-y-auto py-10">
+      <div className="fixed top-1/4 left-1/4 w-80 h-80 bg-accent/30 rounded-full blur-[120px] -z-10 pointer-events-none" />
+      <div className="fixed bottom-1/4 right-1/4 w-80 h-80 bg-purple-500/20 rounded-full blur-[120px] -z-10 pointer-events-none" />
 
       <motion.div
         initial={{ opacity: 0, y: 20, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.4 }}
-        className="w-full max-w-md"
+        className="w-full max-w-md my-auto"
       >
         <GlassCard className="p-8 border-white/10 shadow-2xl">
           <div className="text-center mb-8">
@@ -118,13 +125,13 @@ export const LoginView = () => {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-xs text-center">
+            <div className="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-xs text-center font-medium">
               {error}
             </div>
           )}
 
           {success && (
-            <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs text-center">
+            <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs text-center font-medium">
               {success}
             </div>
           )}
@@ -142,6 +149,7 @@ export const LoginView = () => {
                     placeholder="Seu nome"
                     className="w-full bg-white/5 border border-white/10 rounded-xl py-2.5 pl-10 pr-4 text-sm text-white focus:outline-none focus:border-accent/40 transition-colors"
                     required={!isLogin}
+                    maxLength={50}
                   />
                 </div>
               </div>
@@ -187,7 +195,7 @@ export const LoginView = () => {
 
             {!isLogin && (
               <div className="space-y-1">
-                <label className="text-xs text-white/60 ml-1">Foto de Perfil</label>
+                <label className="text-xs text-white/60 ml-1">Foto de Perfil (Opcional, Máx 5MB)</label>
                 <div className="relative">
                   <input
                     type="file"
@@ -202,8 +210,8 @@ export const LoginView = () => {
                   >
                     {avatar ? (
                       <div className="flex items-center gap-2">
-                        <img src={avatar} alt="Preview" className="w-6 h-6 rounded-full object-cover" />
-                        <span className="text-xs text-white/80">Foto selecionada</span>
+                        <img src={avatar} alt="Preview" className="w-8 h-8 rounded-full object-cover border border-accent/50" />
+                        <span className="text-xs text-white/80">Alterar foto selecionada</span>
                       </div>
                     ) : (
                       <>
@@ -221,7 +229,7 @@ export const LoginView = () => {
               disabled={loading}
               className="w-full bg-accent hover:bg-accent/90 text-black font-bold h-11 rounded-xl flex items-center justify-center gap-2 mt-6 transition-all active:scale-95 disabled:opacity-50"
             >
-              {loading ? 'Carregando...' : isLogin ? 'Entrar' : 'Criar Conta'}
+              {loading ? 'Processando...' : isLogin ? 'Entrar' : 'Criar Conta'}
               {!loading && <ArrowRight size={18} />}
             </button>
           </form>
@@ -233,30 +241,9 @@ export const LoginView = () => {
                 setError('');
                 setSuccess('');
               }}
-              className="text-xs text-accent hover:underline"
+              className="text-xs text-accent hover:underline font-medium"
             >
               {isLogin ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Faça Login'}
-            </button>
-          </div>
-
-          <div className="mt-8 pt-4 border-t border-white/5 text-center">
-            <button
-              onClick={async () => {
-                setLoading(true);
-                try {
-                  await fetch('/api/auth/clear-session', { method: 'POST' });
-                  document.cookie.split(";").forEach((c) => {
-                    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
-                  });
-                  window.location.reload();
-                } catch (e) {
-                  console.error(e);
-                  setLoading(false);
-                }
-              }}
-              className="text-[10px] text-white/30 hover:text-white/60 transition-colors uppercase tracking-wider"
-            >
-              Erro ao entrar? Clique aqui para limpar dados
             </button>
           </div>
 
