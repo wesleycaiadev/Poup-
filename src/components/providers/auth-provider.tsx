@@ -85,9 +85,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
+    try {
+      // 1. Limpa cookies no servidor via API para garantir remoção
+      await fetch('/api/auth/clear-session', { method: 'POST' });
+      // 2. Limpa no client
+      await supabase.auth.signOut();
+      
+      setUser(null);
+      setSession(null);
+      useExpenseStore.getState().setProfile('', '');
+      
+      // Forçar reload hard para limpar cache
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Erro ao sair:', error);
+    }
   };
 
   return (

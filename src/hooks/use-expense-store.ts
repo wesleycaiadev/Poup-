@@ -18,8 +18,8 @@ export const useExpenseStore = create<ExpenseState>()(
   persist(
     (set, get) => ({
       expenses: [],
-      userName: 'Thiago Silva',
-      userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
+      userName: '',
+      userAvatar: '',
       budget: 5000,
       addExpense: (expense) => {
         const newExpense: Expense = {

@@ -1,44 +1,193 @@
 "use client";
 
+import { useState } from "react";
 import { useAuth } from "@/components/providers/auth-provider";
 import { useExpenseStore } from "@/hooks/use-expense-store";
+import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { GlassCard } from "@/components/ui/glass-card";
 import { motion } from "framer-motion";
-import { User, Mail, LogOut } from "lucide-react";
+import { User, Mail, LogOut, Camera, Save, Loader2 } from "lucide-react";
 
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
-  const { userName, userAvatar } = useExpenseStore();
+  const { userName, userAvatar, setProfile } = useExpenseStore();
+  const supabase = getSupabaseBrowserClient();
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(userName);
+  const [editAvatar, setEditAvatar] = useState(userAvatar);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setError('A imagem deve ter menos de 2MB.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditAvatar(reader.result as string);
+        setError("");
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    setLoading(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      // 1. Atualizar no Supabase Profiles
+      const { error: dbError } = await supabase
+        .from('profiles')
+        .upsert({
+          user_id: user.id,
+          name: editName,
+          avatar: editAvatar,
+          updated_at: new Date().toISOString(),
+        });
+
+      if (dbError) throw dbError;
+
+      // 2. Atualizar user_metadata no Auth (para consistência)
+      const { error: authError } = await supabase.auth.updateUser({
+        data: { name: editName, avatar: editAvatar }
+      });
+
+      if (authError) throw authError;
+
+      // 3. Atualizar Zustand Store local
+      setProfile(editName, editAvatar);
+      
+      setSuccess("Perfil atualizado com sucesso!");
+      setIsEditing(false);
+    } catch (err: any) {
+      console.error(err);
+      setError("Erro ao atualizar o perfil. Tente novamente.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditName(userName);
+    setEditAvatar(userAvatar);
+    setIsEditing(false);
+    setError("");
+    setSuccess("");
+  };
+
+  const defaultAvatar = 'https://ui-avatars.com/api/?name=' + (userName || 'User') + '&background=6366f1&color=fff';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="px-1"
+        className="px-1 flex justify-between items-end"
       >
-        <span className="text-sm text-white/50">Sua Conta</span>
-        <h1 className="text-3xl font-black mt-1 text-white">Perfil</h1>
+        <div>
+          <span className="text-sm text-white/50">Sua Conta</span>
+          <h1 className="text-3xl font-black mt-1 text-white">Perfil</h1>
+        </div>
+        {!isEditing && (
+          <button 
+            onClick={() => setIsEditing(true)}
+            className="text-accent text-sm font-semibold hover:text-accent/80 transition-colors"
+          >
+            Editar
+          </button>
+        )}
       </motion.div>
+
+      {error && (
+        <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 text-sm">
+          {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-sm">
+          {success}
+        </div>
+      )}
 
       {/* Card de Perfil */}
       <GlassCard className="p-6 bg-gradient-to-br from-accent/5 to-transparent border-accent/10">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-accent/30 shadow-lg">
-            <img
-              src={userAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80'}
-              alt="Avatar"
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-white">{userName}</h2>
-            <div className="flex items-center gap-1.5 mt-1">
-              <Mail size={12} className="text-white/40" />
-              <p className="text-xs text-white/40">{user?.email || ''}</p>
+          <div className="relative">
+            <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-accent/30 shadow-lg bg-white/5">
+              <img
+                src={(isEditing ? editAvatar : userAvatar) || defaultAvatar}
+                alt="Avatar"
+                className="w-full h-full object-cover"
+              />
             </div>
+            
+            {isEditing && (
+              <label 
+                htmlFor="avatar-upload"
+                className="absolute bottom-0 right-0 w-7 h-7 bg-accent rounded-full flex items-center justify-center cursor-pointer shadow-lg hover:bg-accent/90 transition-transform active:scale-95"
+              >
+                <Camera size={14} className="text-white" />
+                <input
+                  type="file"
+                  id="avatar-upload"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </label>
+            )}
+          </div>
+          
+          <div className="flex-1">
+            {isEditing ? (
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Seu nome completo"
+                  className="w-full bg-white/10 border border-white/20 rounded-lg py-2 px-3 text-sm text-white focus:outline-none focus:border-accent/50"
+                />
+              </div>
+            ) : (
+              <>
+                <h2 className="text-xl font-bold text-white">{userName || 'Usuário'}</h2>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <Mail size={12} className="text-white/40" />
+                  <p className="text-xs text-white/40 truncate">{user?.email || 'email@não.encontrado'}</p>
+                </div>
+              </>
+            )}
           </div>
         </div>
+
+        {isEditing && (
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={cancelEdit}
+              className="flex-1 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm font-semibold text-white/80 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleSaveProfile}
+              disabled={loading || !editName.trim()}
+              className="flex-1 py-2.5 bg-accent hover:bg-accent/90 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-bold flex items-center justify-center gap-2 text-white transition-colors"
+            >
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              Salvar
+            </button>
+          </div>
+        )}
       </GlassCard>
 
       {/* Informações da Conta */}

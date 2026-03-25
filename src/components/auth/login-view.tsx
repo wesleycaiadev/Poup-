@@ -238,6 +238,28 @@ export const LoginView = () => {
               {isLogin ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Faça Login'}
             </button>
           </div>
+
+          <div className="mt-8 pt-4 border-t border-white/5 text-center">
+            <button
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  await fetch('/api/auth/clear-session', { method: 'POST' });
+                  document.cookie.split(";").forEach((c) => {
+                    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                  });
+                  window.location.reload();
+                } catch (e) {
+                  console.error(e);
+                  setLoading(false);
+                }
+              }}
+              className="text-[10px] text-white/30 hover:text-white/60 transition-colors uppercase tracking-wider"
+            >
+              Erro ao entrar? Clique aqui para limpar dados
+            </button>
+          </div>
+
         </GlassCard>
       </motion.div>
     </div>
